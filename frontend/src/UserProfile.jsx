@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import './UserProfile.css';
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -103,7 +102,7 @@ function UserProfile() {
 
   return (
     <div className="page">
-      <div className="profile-card">
+      <div className="card">
         <h1>Create Your Profile</h1>
         <p className="subtitle">Enter your information below</p>
 

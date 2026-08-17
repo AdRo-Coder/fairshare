@@ -86,4 +86,6 @@ public class User {
   public void setCurrency(Currency currency) {
     this.currency = currency;
   }
+
+  public Long getId() {return id; }
 }

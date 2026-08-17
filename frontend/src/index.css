@@ -15,7 +15,7 @@ body {
     align-items: center;
 }
 
-.profile-card {
+.card {
     width: 400px;
     padding: 40px;
     background-color: white;
@@ -23,7 +23,7 @@ body {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
-.profile-card h1 {
+.card h1 {
     margin: 0;
     text-align: center;
 }
@@ -45,14 +45,17 @@ body {
     font-weight: bold;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
     padding: 10px;
     font-size: 16px;
     border: 1px solid #ccc;
     border-radius: 5px;
+    background-color: white;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: #555;
 }
@@ -63,6 +66,12 @@ body {
     color: #d32f2f;
 }
 
+.empty {
+    color: #666;
+    text-align: center;
+    margin: 20px 0;
+}
+
 button {
     width: 100%;
     padding: 12px;
@@ -71,17 +80,4 @@ button {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-}
-
-.form-group select {
-    padding: 10px;
-    font-size: 16px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    background-color: white;
-}
-
-.form-group select:focus {
-    outline: none;
-    border-color: #555;
 }

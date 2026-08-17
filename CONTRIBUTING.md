@@ -77,7 +77,7 @@ Persistence uses MySQL through Spring Data JPA and Hibernate, tracked under issu
 Datasource credentials are supplied only through environment variables and are never committed.
 Hibernate runs with `ddl-auto=validate`, so it checks entity mappings against the existing schema and never creates or alters tables; schema changes come from version-controlled migrations, tracked under issue [#37](https://github.com/se310-fairshare/fairshare/issues/37).
 Backend testing uses JUnit and Mockito, with Testcontainers for database integration tests.
-Frontend testing with Vitest is tracked separately.
+Frontend testing uses Vitest with React Testing Library, with test files under `frontend/test/`.
 
 ## First contributions
 
@@ -132,15 +132,18 @@ cd backend
 ./mvnw --batch-mode clean verify
 ```
 
-The frontend has no test harness yet, so verification is limited to a production build:
+The frontend test suite runs through npm and needs no additional services. Tests use Vitest with React Testing Library and jsdom.
 
-```bash
-cd frontend
-npm ci
-npm run build
-```
+    cd frontend
+    npm ci
+    npm test
 
-Both commands are run by the CI workflow on every push to `main` and on every pull request targeting `main`.
+A production build is verified separately:
+
+    cd frontend
+    npm run build
+
+Both commands are run by the CI workflow on every push to main and on every pull request targeting main.
 
 ## The contribution workflow
 
