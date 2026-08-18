@@ -1,6 +1,13 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 function Header() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setIsLoggedIn(Boolean(localStorage.getItem('fairshareUser')));
+  }, []);
+
   return (
     <header className="header">
       <div className="container header-inner">
@@ -8,7 +15,11 @@ function Header() {
         <nav className="main-nav">
           <Link to="/">Home</Link>
           <Link to="/groups">Groups</Link>
-          <Link to="/register">User Profile</Link>
+          {isLoggedIn ? (
+            <Link to="/profile">Profile</Link>
+          ) : (
+            <Link to="/login">Log In</Link>
+          )}
           <Link to="/groups/new">Create Group</Link>
         </nav>
       </div>

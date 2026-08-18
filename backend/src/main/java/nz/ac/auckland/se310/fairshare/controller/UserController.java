@@ -34,15 +34,46 @@ public class UserController {
       User user = userService.login(request.email(), request.password());
       return ResponseEntity.ok(Map.of(
           "message", "Login successful",
-          "user", Map.of(
-              "id", user.getId(),
-              "username", user.getUsername(),
-              "email", user.getEmail()
-          )
+          "user", serializeUser(user)
       ));
     } catch (IllegalArgumentException e) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid email or password");
     }
+  }
+
+  @GetMapping("/{id}")
+  public ResponseEntity<?> getUser(@PathVariable Long id) {
+    try {
+      return ResponseEntity.ok(Map.of("user", serializeUser(userService.getUserById(id))));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+    }
+  }
+
+  @PutMapping("/{id}")
+  public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User updatedUser) {
+    try {
+      User user = userService.updateUser(id, updatedUser);
+      return ResponseEntity.ok(Map.of(
+          "message", "Profile updated successfully",
+          "user", serializeUser(user)
+      ));
+    } catch (IllegalArgumentException e) {
+      if ("User not found".equals(e.getMessage())) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+      }
+      return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    }
+  }
+
+  private Map<String, Object> serializeUser(User user) {
+    return Map.of(
+        "id", user.getId(),
+        "username", user.getUsername(),
+        "email", user.getEmail(),
+        "country", user.getCountry() == null ? null : user.getCountry().name(),
+        "currency", user.getCurrency() == null ? null : user.getCurrency().name()
+    );
   }
 
 }
