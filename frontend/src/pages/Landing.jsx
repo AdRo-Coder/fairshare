@@ -1,20 +1,20 @@
-import { Link } from 'react-router-dom';
+import {Link} from 'react-router-dom';
+import './Landing.css';
 
 function Landing() {
-  return (
-    <div className="page landing">
-      <div className="card">
-        <h1>Welcome to FairShare</h1>
-        <p className="subtitle">Easily split bills and manage group expenses.</p>
+    return (
+        <div className="page landing">
+            <div className="card">
+                <h1>Welcome to FairShare</h1>
+                <p className="subtitle">Easily split bills and manage group expenses.</p>
 
-        <div className="actions">
-          <Link to="/groups" className="button">Group Overview</Link>
-          <Link to="/groups/new" className="button secondary">Create Group</Link>
-          <Link to="/register" className="button">User Profile</Link>
+                <div className="actions">
+                    <Link to="/register" className="button landingLink">Create Profile</Link>
+                    <Link to="/login" className="button">Log-in</Link>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default Landing;
