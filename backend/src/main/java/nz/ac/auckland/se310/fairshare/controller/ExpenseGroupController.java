@@ -40,4 +40,15 @@ public class ExpenseGroupController {
     public GroupResponse get(@PathVariable Long id) {
         return groupService.getGroup(id, currentUser.currentUserId());
     }
+
+    @PostMapping("/{id}/settlement")
+    public List<nz.ac.auckland.se310.fairshare.dto.SettlementLine> settlement(@PathVariable("id") Long id, @RequestBody nz.ac.auckland.se310.fairshare.dto.SettlementRequest request) {
+        // authorisation enforced inside service; will throw 404 for non-members (AC8)
+        return groupService.computeSettlement(id, currentUser.currentUserId(), request.balances());
+    }
+
+    @GetMapping("/{id}/balances")
+    public List<nz.ac.auckland.se310.fairshare.dto.MemberBalance> balances(@PathVariable("id") Long id) {
+        return groupService.getMemberBalances(id, currentUser.currentUserId());
+    }
 }
