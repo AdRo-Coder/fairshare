@@ -7,6 +7,7 @@ import CreateGroup from './pages/CreateGroup.jsx';
 import GroupPage from './pages/GroupPage.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
+import UserManagement from './pages/UserManagement.jsx';
 import './index.css';
 import App from './App.jsx';
 
@@ -26,6 +27,10 @@ const router = createBrowserRouter([
             {
                 path: '/register',
                 element: <UserProfile/>,
+            },
+            {
+                path: '/profile',
+                element: <UserManagement/>,
             },
             {
                 path: 'groups',
