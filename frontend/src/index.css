@@ -81,3 +81,41 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
+
+.logo {
+    display: inline-flex;
+    align-items: center;
+}
+
+.logo-image {
+    display: block;
+    height: 48px;
+    width: auto;
+}
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+}
+
+.main-nav {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.main-nav a {
+    text-decoration: none;
+    color: #333;
+    font-weight: 600;
+}
