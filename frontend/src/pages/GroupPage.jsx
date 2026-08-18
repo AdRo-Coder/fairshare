@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getGroup } from '../api/groups';
+import SettlementView from './SettlementView';
 import './GroupPage.css';
 
 function GroupPage() {
@@ -76,6 +77,11 @@ function GroupPage() {
                     <p className="balance">
                         Everyone is settled up. Balance: {group.baseCurrency} 0.00
                     </p>
+                </section>
+
+                <section>
+                    <h2>Settlement plan</h2>
+                    <SettlementView groupId={group.id} baseCurrency={group.baseCurrency} />
                 </section>
 
                 <Link to="/groups">Back to your groups</Link>
