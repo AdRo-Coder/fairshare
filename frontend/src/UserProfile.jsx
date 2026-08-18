@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import {useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -19,6 +20,7 @@ function UserProfile() {
   const [country, setCountry] = useState('');
   const [currency, setCurrency] = useState('');
   const [errors, setErrors] = useState({});
+  const navigate = useNavigate();
 
   function handleCountryChange(event) {
     const selectedCountry = event.target.value;
@@ -95,7 +97,8 @@ function UserProfile() {
           email: 'Email is already registered'
         });
       } else {
-        // TODO: Redirect to the next page.
+        // On success, navigate back to the landing page
+        navigate('/');
       }
     }
   }
