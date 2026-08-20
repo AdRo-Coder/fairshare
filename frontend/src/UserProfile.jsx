@@ -1,5 +1,6 @@
-import {useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { validateUserProfile } from './utils/userValidation';
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -10,8 +11,6 @@ const currencies = [
   'NZD',
   'AUD'
 ];
-
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function UserProfile() {
   const [username, setUsername] = useState('');
@@ -35,42 +34,16 @@ function UserProfile() {
     }
   }
 
-  function validate() {
-    const newErrors = {};
-
-    if (!email) {
-      newErrors.email = 'Email is required';
-    } else if (!emailRegex.test(email)) {
-      newErrors.email = 'Email is invalid';
-    }
-
-    if (!username) {
-      newErrors.username = 'Username is required';
-    } else if (username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
-    }
-
-    if (!password) {
-      newErrors.password = 'Password is required';
-    } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    }
-
-    if (!country) {
-      newErrors.country = 'Country is required';
-    }
-
-    if (!currency) {
-      newErrors.currency = 'Currency is required';
-    }
-
-    return newErrors;
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const validationErrors = validate();
+    const validationErrors = validateUserProfile({
+      username,
+      password,
+      email,
+      country,
+      currency
+    });
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length === 0) {

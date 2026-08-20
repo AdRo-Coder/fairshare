@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../api/config';
+import { validateUserProfile } from '../utils/userValidation';
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -71,6 +72,20 @@ function UserManagement() {
     setError('');
     setMessage('');
 
+    const validationErrors = validateUserProfile({
+      username,
+      email,
+      password,
+      country,
+      currency,
+      requirePassword: false
+    });
+
+    if (Object.keys(validationErrors).length > 0) {
+      setError('Please fix the highlighted fields and try again.');
+      return;
+    }
+
     const storedUser = localStorage.getItem('fairshareUser');
     if (!storedUser) {
       navigate('/login');
@@ -132,6 +147,15 @@ function UserManagement() {
     );
   }
 
+  const fieldErrors = validateUserProfile({
+    username,
+    email,
+    password,
+    country,
+    currency,
+    requirePassword: false
+  });
+
   return (
     <div className="page">
       <div className="card">
@@ -147,6 +171,7 @@ function UserManagement() {
               value={username}
               onChange={(event) => setUsername(event.target.value)}
             />
+            {fieldErrors.username && <span className="error">{fieldErrors.username}</span>}
           </div>
 
           <div className="form-group">
@@ -157,6 +182,7 @@ function UserManagement() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
+            {fieldErrors.email && <span className="error">{fieldErrors.email}</span>}
           </div>
 
           <div className="form-group">
@@ -168,6 +194,7 @@ function UserManagement() {
               placeholder="Leave blank to keep current password"
               onChange={(event) => setPassword(event.target.value)}
             />
+            {fieldErrors.password && <span className="error">{fieldErrors.password}</span>}
           </div>
 
           <div className="form-group">
@@ -180,6 +207,7 @@ function UserManagement() {
                 </option>
               ))}
             </select>
+            {fieldErrors.country && <span className="error">{fieldErrors.country}</span>}
           </div>
 
           <div className="form-group">
@@ -192,6 +220,7 @@ function UserManagement() {
                 </option>
               ))}
             </select>
+            {fieldErrors.currency && <span className="error">{fieldErrors.currency}</span>}
           </div>
 
           {error && <div className="error">{error}</div>}
