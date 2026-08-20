@@ -16,7 +16,8 @@ import nz.ac.auckland.se310.fairshare.repository.ExpenseGroupRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
+import java.math.BigDecimal;
 
 @Service
 public class ExpenseGroupService {

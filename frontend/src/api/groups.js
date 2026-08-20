@@ -53,6 +53,24 @@ export async function getGroup(id) {
     return response.json();
 }
 
+export async function getGroupBalances(id) {
+    const response = await fetch(`${API_BASE}/groups/${id}/balances`, { credentials: 'include' });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Failed to load balances: ${response.status}`);
+    return response.json();
+}
+
+export async function computeSettlement(id, balances) {
+    const response = await fetch(`${API_BASE}/groups/${id}/settlement`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ balances })
+    });
+    if (!response.ok) throw new Error(`Failed to compute settlement: ${response.status}`);
+    return response.json();
+}
+
 export async function getGroupMembers(id) {
     const groupId = requirePositiveInteger(id, 'Group ID');
     const response = await fetch(`${API_BASE}/groups/${groupId}/members`, {

@@ -26,4 +26,56 @@ public class UserService {
 
     userRepository.save(user);
   }
+
+  public synchronized User login(String email, String password) {
+    if (email == null || password == null) {
+      throw new IllegalArgumentException("Invalid email or password");
+    }
+
+    User user = userRepository
+        .findByEmail(email.trim().toLowerCase())
+        .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+
+    if (!encoder.matches(password, user.getPassword())) {
+      throw new IllegalArgumentException("Invalid email or password");
+    }
+
+    return user;
+  }
+
+  public synchronized User getUserById(Long id) {
+    return userRepository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("User not found"));
+  }
+
+  public synchronized User updateUser(Long id, User updatedUser) {
+    User existingUser = getUserById(id);
+
+    if (updatedUser.getUsername() != null && !updatedUser.getUsername().isBlank()) {
+      existingUser.setUsername(updatedUser.getUsername().trim());
+    }
+
+    if (updatedUser.getEmail() != null && !updatedUser.getEmail().isBlank()) {
+      String normalizedEmail = updatedUser.getEmail().trim().toLowerCase();
+      if (!normalizedEmail.equals(existingUser.getEmail())
+          && userRepository.findByEmail(normalizedEmail).isPresent()) {
+        throw new IllegalArgumentException("Email already in use");
+      }
+      existingUser.setEmail(normalizedEmail);
+    }
+
+    if (updatedUser.getCountry() != null) {
+      existingUser.setCountry(updatedUser.getCountry());
+    }
+
+    if (updatedUser.getCurrency() != null) {
+      existingUser.setCurrency(updatedUser.getCurrency());
+    }
+
+    if (updatedUser.getPassword() != null && !updatedUser.getPassword().isBlank()) {
+      existingUser.setPassword(encoder.encode(updatedUser.getPassword()));
+    }
+
+    return userRepository.save(existingUser);
+  }
 }
