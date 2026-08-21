@@ -44,6 +44,11 @@ public class UserInGroup {
         return netBalance.compareTo(BigDecimal.ZERO) != 0;
     }
 
+    // Positive means the member is owed, negative means they owe.
+    public void adjustNetBalance(BigDecimal delta) {
+        this.netBalance = this.netBalance.add(delta).setScale(2);
+    }
+
     @Override
     public boolean equals(Object object) {
         if (this == object) return true;

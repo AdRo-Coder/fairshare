@@ -1,6 +1,6 @@
 import {API_BASE} from "./config.js";
 
-async function readError(response, fallback) {
+export async function readError(response, fallback) {
     try {
         const body = await response.json();
         return body.error || Object.values(body)[0] || fallback;
@@ -9,7 +9,7 @@ async function readError(response, fallback) {
     }
 }
 
-function requirePositiveInteger(value, label) {
+export function requirePositiveInteger(value, label) {
     const text = String(value);
     if (!/^[1-9]\d*$/.test(text)) {
         throw new TypeError(`${label} must be a positive integer`);
