@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_BASE } from '../api/config';
 import { validateUserProfile } from '../utils/userValidation';
+import {getCurrentUser, logout, updateCurrentUser} from "../api/users.js";
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -22,27 +22,13 @@ function UserManagement() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('fairshareUser');
-    if (!storedUser) {
-      navigate('/login');
-      return;
-    }
-
-    const parsedUser = JSON.parse(storedUser);
-    if (!parsedUser.id) {
-      navigate('/login');
-      return;
-    }
-
     async function loadProfile() {
       try {
-        const response = await fetch(`${API_BASE}/users/${parsedUser.id}`);
-        if (!response.ok) {
-          throw new Error('Profile could not be loaded');
+        const user = await getCurrentUser();
+        if (!user) {
+          navigate('/login');
+          return;
         }
-
-        const result = await response.json();
-        const user = result.user;
         setUsername(user.username || '');
         setEmail(user.email || '');
         setCountry(user.country || '');
@@ -73,12 +59,7 @@ function UserManagement() {
     setMessage('');
 
     const validationErrors = validateUserProfile({
-      username,
-      email,
-      password,
-      country,
-      currency,
-      requirePassword: false
+      username, email, password, country, currency, requirePassword: false
     });
 
     if (Object.keys(validationErrors).length > 0) {
@@ -86,45 +67,14 @@ function UserManagement() {
       return;
     }
 
-    const storedUser = localStorage.getItem('fairshareUser');
-    if (!storedUser) {
-      navigate('/login');
-      return;
-    }
-
-    const parsedUser = JSON.parse(storedUser);
-    const payload = {
-      username,
-      email,
-      country,
-      currency,
-      password: password || undefined
-    };
-
     try {
-      const response = await fetch(`${API_BASE}/users/${parsedUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+      await updateCurrentUser({
+        username,
+        email,
+        country,
+        currency,
+        password: password || undefined
       });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Profile update failed');
-      }
-
-      const result = await response.json();
-      const nextUser = result.user;
-      localStorage.setItem(
-        'fairshareUser',
-        JSON.stringify({
-          id: nextUser.id,
-          username: nextUser.username,
-          email: nextUser.email
-        })
-      );
       setPassword('');
       setMessage('Your profile has been updated.');
     } catch (submitError) {
@@ -132,9 +82,13 @@ function UserManagement() {
     }
   }
 
-  function handleLogout() {
-    localStorage.removeItem('fairshareUser');
-    navigate('/');
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch (logoutError) {
+      // The session may already be gone; navigate away regardless.
+    }
+    navigate('/login');
   }
 
   if (loading) {

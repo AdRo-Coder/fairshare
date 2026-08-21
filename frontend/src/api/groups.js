@@ -1,4 +1,4 @@
-import {API_BASE} from "./config.js";
+import { apiFetch } from './config.js';
 
 export async function readError(response, fallback) {
     try {
@@ -23,10 +23,9 @@ export function requirePositiveInteger(value, label) {
 }
 
 export async function createGroup(name, description) {
-    const response = await fetch(`${API_BASE}/groups`, {
+    const response = await apiFetch('/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ name, description })
     });
 
@@ -40,30 +39,31 @@ export async function createGroup(name, description) {
 }
 
 export async function getGroups() {
-    const response = await fetch(`${API_BASE}/groups`, { credentials: 'include' });
+    const response = await apiFetch('/groups');
     if (!response.ok) throw new Error(`Failed to load groups: ${response.status}`);
     return response.json();
 }
 
 export async function getGroup(id) {
     const groupId = requirePositiveInteger(id, 'Group ID');
-    const response = await fetch(`${API_BASE}/groups/${groupId}`, { credentials: 'include' });
+    const response = await apiFetch(`/groups/${groupId}`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Failed to load group: ${response.status}`);
     return response.json();
 }
 
 export async function getGroupBalances(id) {
-    const response = await fetch(`${API_BASE}/groups/${id}/balances`, { credentials: 'include' });
+    const groupId = requirePositiveInteger(id, 'Group ID');
+    const response = await apiFetch(`/groups/${groupId}/balances`);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Failed to load balances: ${response.status}`);
     return response.json();
 }
 
 export async function computeSettlement(id, balances) {
-    const response = await fetch(`${API_BASE}/groups/${id}/settlement`, {
+    const groupId = requirePositiveInteger(id, 'Group ID');
+    const response = await apiFetch(`/groups/${groupId}/settlement`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ balances })
     });
@@ -73,9 +73,7 @@ export async function computeSettlement(id, balances) {
 
 export async function getGroupMembers(id) {
     const groupId = requirePositiveInteger(id, 'Group ID');
-    const response = await fetch(`${API_BASE}/groups/${groupId}/members`, {
-        credentials: 'include'
-    });
+    const response = await apiFetch(`/groups/${groupId}/members`);
     if (!response.ok) {
         return { error: await readError(response, 'Could not load group members.') };
     }
@@ -84,10 +82,9 @@ export async function getGroupMembers(id) {
 
 export async function addGroupMember(id, identifier) {
     const groupId = requirePositiveInteger(id, 'Group ID');
-    const response = await fetch(`${API_BASE}/groups/${groupId}/members`, {
+    const response = await apiFetch(`/groups/${groupId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ identifier })
     });
     if (!response.ok) {
@@ -99,9 +96,8 @@ export async function addGroupMember(id, identifier) {
 export async function removeGroupMember(id, userId) {
     const groupId = requirePositiveInteger(id, 'Group ID');
     const memberId = requirePositiveInteger(userId, 'Member ID');
-    const response = await fetch(`${API_BASE}/groups/${groupId}/members/${memberId}`, {
-        method: 'DELETE',
-        credentials: 'include'
+    const response = await apiFetch(`/groups/${groupId}/members/${memberId}`, {
+        method: 'DELETE'
     });
     if (!response.ok) {
         return { error: await readError(response, 'Could not remove this member.') };

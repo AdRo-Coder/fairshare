@@ -23,8 +23,7 @@ function CreateGroup() {
             }
 
             navigate(`/groups/${result.group.id}`);   // AC1: taken to the new group's page
-        } catch (error) {
-            console.error('Failed to create group', error)
+        } catch {
             setErrors({ form: 'Could not create the group. Please try again.' });
         } finally {
             setSubmitting(false);

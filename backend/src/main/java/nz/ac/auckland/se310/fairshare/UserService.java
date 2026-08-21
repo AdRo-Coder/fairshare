@@ -27,22 +27,6 @@ public class UserService {
     userRepository.save(user);
   }
 
-  public synchronized User login(String email, String password) {
-    if (email == null || password == null) {
-      throw new IllegalArgumentException("Invalid email or password");
-    }
-
-    User user = userRepository
-        .findByEmail(email.trim().toLowerCase())
-        .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
-
-    if (!encoder.matches(password, user.getPassword())) {
-      throw new IllegalArgumentException("Invalid email or password");
-    }
-
-    return user;
-  }
-
   public synchronized User getUserById(Long id) {
     return userRepository.findById(id)
         .orElseThrow(() -> new IllegalArgumentException("User not found"));

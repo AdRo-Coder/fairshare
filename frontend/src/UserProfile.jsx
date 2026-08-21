@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { validateUserProfile } from './utils/userValidation';
+import {API_BASE} from "./api/config.js";
 
 const countries = [
   { name: 'New Zealand', value: 'NEW_ZEALAND', currency: 'NZD' },
@@ -56,11 +57,12 @@ function UserProfile() {
         currency: currency
       };
 
-      const response = await fetch('http://localhost:8080/users/register', {
+      const response = await fetch(`${API_BASE}/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify(user)
       });
 

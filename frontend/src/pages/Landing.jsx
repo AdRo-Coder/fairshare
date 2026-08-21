@@ -1,13 +1,15 @@
 import {Link} from 'react-router-dom';
 import {useEffect, useState} from 'react';
 import './Landing.css';
+import {getCurrentUser} from "../api/users.js";
 
 function Landing() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
-        const user = localStorage.getItem('fairshareUser');
-        setIsLoggedIn(Boolean(user));
+        getCurrentUser()
+            .then((user) => setIsLoggedIn(Boolean(user)))
+            .catch(() =>  setIsLoggedIn(false))
     }, []);
 
     return (

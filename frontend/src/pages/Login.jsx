@@ -17,6 +17,7 @@ function Login() {
       headers: {
         'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({ email, password })
     });
 
@@ -26,12 +27,7 @@ function Login() {
       return;
     }
 
-    const data = await response.json();
-    if (data.user) {
-      localStorage.setItem('fairshareUser', JSON.stringify(data.user));
-    }
-
-    navigate('/groups');
+    navigate('/');
   }
 
   return (
