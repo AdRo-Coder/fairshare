@@ -83,10 +83,10 @@ it('AC7: lists each expense with amount, description, payer and date', async () 
 
     expect(await screen.findByText('Pizza')).toBeInTheDocument();
     expect(screen.getByText('bob paid on 2026-08-18')).toBeInTheDocument();
-    expect(screen.getByText('NZD 20')).toBeInTheDocument();
+    expect(screen.getByText('NZD 20.00')).toBeInTheDocument();
     expect(screen.getByText('Taxi')).toBeInTheDocument();
     expect(screen.getByText('alice paid on 2026-08-16')).toBeInTheDocument();
-    expect(screen.getByText('NZD 10')).toBeInTheDocument();
+    expect(screen.getByText('NZD 10.00')).toBeInTheDocument();
 });
 
 it('AC1: shows what each member is owed or owes', async () => {

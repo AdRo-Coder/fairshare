@@ -6,7 +6,7 @@ import SettlementView from './SettlementView';
 import './GroupPage.css';
 
 function money(currency, value) {
-    return `${currency} ${Math.abs(Number(value).toFixed(2))}`;
+    return `${currency} ${Math.abs(Number(value)).toFixed(2)}`;
 }
 
 function balanceLine(member, currency) {
