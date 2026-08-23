@@ -187,6 +187,8 @@ class ExpenseGroupServiceSettlementPersistenceTest {
     @Test
     void markSettlementPaidSetsSettlementDateAndPersistsPayment() {
         Settlement open = new Settlement(group, bobUser, aliceUser, new BigDecimal("25.00"));
+        group.getMember(aliceUser.getId()).adjustNetBalance(BigDecimal.valueOf(-25.00));
+        group.getMember(bobUser.getId()).adjustNetBalance(BigDecimal.valueOf(25.00));
         open.setSettlementDate(null);
         when(settlementRepository.findByGroupIdAndFromUserIdAndToUserIdOrderByIdDesc(GROUP_ID, BOB, ALICE))
                 .thenReturn(List.of(open));
@@ -195,6 +197,8 @@ class ExpenseGroupServiceSettlementPersistenceTest {
 
         assertThat(open.getSettlementDate()).isNotNull();
         verify(settlementRepository).save(open);
+        assertThat(group.getMember(aliceUser.getId()).getNetBalance()).isZero();
+        assertThat(group.getMember(bobUser.getId()).getNetBalance()).isZero();
     }
 
     @Test
