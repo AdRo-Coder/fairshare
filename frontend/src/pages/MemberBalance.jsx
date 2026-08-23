@@ -72,10 +72,10 @@ function MemberBalance() {
     const balance = Number(member.netBalance);
     let balanceClass = "balance";
     let message;
-    if (balance > 0) {
+    if (balance < 0) {
         message = `+ ${formatMoney(group.baseCurrency, balance)}`;
         balanceClass = "balance-Positive";
-    } else if (balance < 0) {
+    } else if (balance > 0) {
         message = `- ${formatMoney(group.baseCurrency, balance)}`;
         balanceClass = "balance-Negative";
     } else {
