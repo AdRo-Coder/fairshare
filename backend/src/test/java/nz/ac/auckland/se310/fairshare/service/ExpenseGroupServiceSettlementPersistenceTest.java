@@ -64,6 +64,7 @@ class ExpenseGroupServiceSettlementPersistenceTest {
 
         group = new ExpenseGroup("Trip", null, User.Currency.NZD, aliceUser);
         group.addMember(bobUser);
+        ReflectionTestUtils.setField(group, "id", GROUP_ID);
 
         service = new ExpenseGroupService(groupRepository, userRepository, expenseService, settlementRepository);
 
@@ -166,5 +167,23 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         Settlement saved = settlementCaptor.getValue();
         assertThat(saved.getSettlementDate()).isNull();
         assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
+    }
+
+    @Test
+    void groupBalancesReflectOpenSettlements() {
+        group.getMember(ALICE).adjustNetBalance(new BigDecimal("50.00"));
+        group.getMember(BOB).adjustNetBalance(new BigDecimal("-50.00"));
+
+        Settlement openSettlement = new Settlement(group, bobUser, aliceUser, new BigDecimal("30.00"));
+        openSettlement.setSettlementDate(null);
+        when(settlementRepository.findByGroupId(GROUP_ID)).thenReturn(List.of(openSettlement));
+
+        var balances = service.getBalances(GROUP_ID, ALICE);
+
+        assertThat(balances).extracting("userId").containsExactlyInAnyOrder(ALICE, BOB);
+        assertThat(balances).filteredOn(b -> b.userId().equals(ALICE)).singleElement()
+                .extracting("balance").isEqualTo(new BigDecimal("20.00"));
+        assertThat(balances).filteredOn(b -> b.userId().equals(BOB)).singleElement()
+                .extracting("balance").isEqualTo(new BigDecimal("-20.00"));
     }
 }

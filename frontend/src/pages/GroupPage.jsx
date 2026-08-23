@@ -12,10 +12,7 @@ function money(currency, value) {
 function balanceLine(member, currency) {
     const balance = Number(member.netBalance);
     if (balance > 0) {
-        return `${member.username} is owed ${money(currency, balance)}`;
-    }
-    if (balance < 0) {
-        return `${member.username} owes ${money(currency, -balance)}`;
+        return `${member.username} owes ${money(currency, balance)}`;
     }
     return `${member.username} is settled up`;
 }

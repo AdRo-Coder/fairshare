@@ -78,8 +78,9 @@ public class ExpenseGroupService {
     @Transactional(readOnly = true)
     public List<GroupMemberResponse> getMembers(Long groupId, Long currentUserId) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
+        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
         return group.getMembers().stream()
-                .map(member -> toMemberResponse(member, currentUserId))
+                .map(member -> toMemberResponse(member, currentUserId, memberBalances))
                 .sorted((first, second) -> first.username().compareToIgnoreCase(second.username()))
                 .toList();
     }
@@ -96,7 +97,8 @@ public class ExpenseGroupService {
 
         group.addMember(user);
         groupRepository.save(group);
-        return toMemberResponse(group.getMember(user.getId()), currentUserId);
+        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
+        return toMemberResponse(group.getMember(user.getId()), currentUserId, memberBalances);
     }
 
     @Transactional
@@ -122,9 +124,10 @@ public class ExpenseGroupService {
     @Transactional(readOnly = true)
     public List<MemberBalance> getBalances(Long groupId, Long currentUserId) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
+        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
         return group.getMembers().stream()
                 .sorted(Comparator.comparing(member -> member.getUser().getId()))
-                .map(member -> new MemberBalance(member.getUser().getId(), member.getNetBalance()))
+                .map(member -> new MemberBalance(member.getUser().getId(), memberBalances.getOrDefault(member.getUser().getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
@@ -302,6 +305,25 @@ public class ExpenseGroupService {
         return transactions;
     }
 
+    private Map<Long, BigDecimal> computeBalancesIncludingSettlements(ExpenseGroup group) {
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        for (UserInGroup member : group.getMembers()) {
+            balances.put(member.getUser().getId(), member.getNetBalance());
+        }
+
+        for (Settlement settlement : settlementRepository.findByGroupId(group.getId())) {
+            if (settlement.getSettlementDate() != null) {
+                continue;
+            }
+            Long fromUserId = settlement.getFromUser().getId();
+            Long toUserId = settlement.getToUser().getId();
+            balances.merge(fromUserId, settlement.getAmount(), BigDecimal::add);
+            balances.merge(toUserId, settlement.getAmount().negate(), BigDecimal::add);
+        }
+
+        return balances;
+    }
+
     private ExpenseGroup requireMemberGroup(Long groupId, Long currentUserId) {
         return groupRepository.findByIdAndMembersUserId(groupId, currentUserId)
                 .orElseThrow(GroupAccessDeniedException::new);
@@ -334,13 +356,13 @@ public class ExpenseGroupService {
                 group.getMembers().size());
     }
 
-    private GroupMemberResponse toMemberResponse(UserInGroup member, Long currentUserId) {
+    private GroupMemberResponse toMemberResponse(UserInGroup member, Long currentUserId, Map<Long, BigDecimal> memberBalances) {
         User user = member.getUser();
         return new GroupMemberResponse(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
-                member.getNetBalance(),
+                memberBalances.getOrDefault(user.getId(), BigDecimal.ZERO),
                 user.getId().equals(currentUserId));
     }
 
