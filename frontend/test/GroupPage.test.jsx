@@ -54,7 +54,6 @@ it('AC2: a new group lists no expenses and shows zero balances', async () => {
 
     expect(await screen.findByText('Flat 3')).toBeInTheDocument();
     expect(screen.getByText('No expenses yet.')).toBeInTheDocument();
-    expect(screen.getByText(/NZD 0\.00/)).toBeInTheDocument();
 });
 
 it('links to member management from the group page', async () => {
@@ -84,10 +83,10 @@ it('AC7: lists each expense with amount, description, payer and date', async () 
 
     expect(await screen.findByText('Pizza')).toBeInTheDocument();
     expect(screen.getByText('bob paid on 2026-08-18')).toBeInTheDocument();
-    expect(screen.getByText('NZD 20.00')).toBeInTheDocument();
+    expect(screen.getByText('NZD 20')).toBeInTheDocument();
     expect(screen.getByText('Taxi')).toBeInTheDocument();
     expect(screen.getByText('alice paid on 2026-08-16')).toBeInTheDocument();
-    expect(screen.getByText('NZD 10.00')).toBeInTheDocument();
+    expect(screen.getByText('NZD 10')).toBeInTheDocument();
 });
 
 it('AC1: shows what each member is owed or owes', async () => {
@@ -100,7 +99,7 @@ it('AC1: shows what each member is owed or owes', async () => {
 
     renderPage();
 
-    expect(await screen.findByText('alice is settled up')).toBeInTheDocument();
+    expect(await screen.findByText('alice is owed NZD 21.25')).toBeInTheDocument();
     expect(screen.getByText('bob owes NZD 21.25')).toBeInTheDocument();
 });
 

@@ -124,7 +124,7 @@ public class ExpenseGroupService {
     @Transactional(readOnly = true)
     public List<MemberBalance> getBalances(Long groupId, Long currentUserId) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
-        Map<Long, BigDecimal> memberBalances = computeEffectiveBalances(groupId, group, null);
+        Map<Long, BigDecimal> memberBalances = computeEffectiveBalances(groupId, group, expenseService.getExpensesForGroup(groupId, currentUserId));
         return group.getMembers().stream()
                 .sorted(Comparator.comparing(member -> member.getUser().getId()))
                 .map(member -> new MemberBalance(member.getUser().getId(), memberBalances.getOrDefault(member.getUser().getId(), BigDecimal.ZERO)))
@@ -168,11 +168,11 @@ public class ExpenseGroupService {
 
         if (payer != null) {
             BigDecimal old = payer.getNetBalance() == null ? BigDecimal.ZERO : payer.getNetBalance();
-            payer.adjustNetBalance(old.subtract(amount));
+            payer.adjustNetBalance(old.add(amount));
         }
         if (recipient != null) {
             BigDecimal old = recipient.getNetBalance() == null ? BigDecimal.ZERO : recipient.getNetBalance();
-            recipient.adjustNetBalance(old.add(amount));
+            recipient.adjustNetBalance(old.subtract(amount));
         }
 
         // Mark the settlement as paid and persist changes
@@ -307,60 +307,115 @@ public class ExpenseGroupService {
             return Collections.emptyList();
         }
 
-        List<PersonBalance> debtors = new ArrayList<>();
-        List<PersonBalance> creditors = new ArrayList<>();
-
+        List<PersonBalance> active = new ArrayList<>();
         for (Map.Entry<Long, BigDecimal> entry : totalExpenses.entrySet()) {
-            BigDecimal amount = entry.getValue() == null ? BigDecimal.ZERO : entry.getValue();
-            if (amount.compareTo(BigDecimal.ZERO) > 0) {
-                debtors.add(new PersonBalance(entry.getKey(), amount));
-            } else if (amount.compareTo(BigDecimal.ZERO) < 0) {
-                creditors.add(new PersonBalance(entry.getKey(), amount.abs()));
+            BigDecimal amount = entry.getValue() == null ? BigDecimal.ZERO : entry.getValue().setScale(2, RoundingMode.HALF_UP);
+            if (amount.compareTo(BigDecimal.ZERO) != 0) {
+                active.add(new PersonBalance(entry.getKey(), amount));
             }
         }
 
-        // Sort by amount descending to pair largest debtors with largest creditors first —
-        // this tends to minimise the number of transactions compared to arbitrary ID ordering.
-        debtors.sort((a, b) -> b.amount.compareTo(a.amount));
-        creditors.sort((a, b) -> b.amount.compareTo(a.amount));
+        int n = active.size();
+        if (n == 0) return Collections.emptyList();
 
-        List<SettlementLine> transactions = new ArrayList<>();
-        int i = 0;
-        int j = 0;
+        // 1. Precalculate balances for all 2^n subsets
+        BigDecimal[] subsetSums = new BigDecimal[1 << n];
+        subsetSums[0] = BigDecimal.ZERO;
+        for (int mask = 1; mask < (1 << n); mask++) {
+            int lastBit = Integer.numberOfTrailingZeros(mask);
+            subsetSums[mask] = subsetSums[mask ^ (1 << lastBit)].add(active.get(lastBit).amount);
+        }
 
-        while (i < debtors.size() && j < creditors.size()) {
-            PersonBalance debtor = debtors.get(i);
-            PersonBalance creditor = creditors.get(j);
+        // 2. Dynamic programming to find max independent zero-sum subsets
+        int[] dp = new int[1 << n];
+        int[] parentMask = new int[1 << n];
 
-            BigDecimal payment = debtor.amount.min(creditor.amount).setScale(2, RoundingMode.HALF_UP);
-            if (payment.compareTo(BigDecimal.ZERO) > 0) {
-                transactions.add(new SettlementLine(debtor.name, creditor.name, payment));
+        for (int mask = 1; mask < (1 << n); mask++) {
+            dp[mask] = 0;
+            parentMask[mask] = 0;
+
+            // Try all submasks of 'mask'
+            for (int submask = mask; submask > 0; submask = (submask - 1) & mask) {
+                if (subsetSums[submask].compareTo(BigDecimal.ZERO) == 0) {
+                    int val = 1 + dp[mask ^ submask];
+                    if (val > dp[mask]) {
+                        dp[mask] = val;
+                        parentMask[mask] = submask;
+                    }
+                }
             }
+        }
 
-            debtor.amount = debtor.amount.subtract(payment);
-            creditor.amount = creditor.amount.subtract(payment);
+        // 3. Reconstruct zero-sum groups
+        List<List<PersonBalance>> groups = new ArrayList<>();
+        int curr = (1 << n) - 1;
 
-            if (debtor.amount.compareTo(new BigDecimal("0.005")) < 0) i++;
-            if (creditor.amount.compareTo(new BigDecimal("0.005")) < 0) j++;
+        while (curr > 0) {
+            int sub = parentMask[curr];
+            if (sub == 0) {
+                // Remaining elements don't form a smaller zero-sum submask; settle them as one group
+                List<PersonBalance> group = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    if ((curr & (1 << i)) != 0) {
+                        group.add(new PersonBalance(active.get(i).name, active.get(i).amount));
+                    }
+                }
+                groups.add(group);
+                break;
+            } else {
+                List<PersonBalance> group = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    if ((sub & (1 << i)) != 0) {
+                        group.add(new PersonBalance(active.get(i).name, active.get(i).amount));
+                    }
+                }
+                groups.add(group);
+                curr ^= sub;
+            }
+        }
+
+        // 4. Settle each zero-sum group greedy-style
+        List<SettlementLine> transactions = new ArrayList<>();
+        for (List<PersonBalance> group : groups) {
+            transactions.addAll(settleGroup(group));
         }
 
         return transactions;
     }
 
-    private Map<Long, BigDecimal> computeBalancesIncludingSettlements(ExpenseGroup group) {
-        Map<Long, BigDecimal> balances = new HashMap<>();
+    private static List<SettlementLine> settleGroup(List<PersonBalance> group) {
+        List<PersonBalance> debtors = new ArrayList<>();
+        List<PersonBalance> creditors = new ArrayList<>();
 
-        for (Settlement settlement : settlementRepository.findByGroupId(group.getId())) {
-            if (settlement.getSettlementDate() != null) {
-                continue;
+        for (PersonBalance p : group) {
+            if (p.amount.compareTo(BigDecimal.ZERO) > 0) {
+                debtors.add(new PersonBalance(p.name, p.amount));
+            } else if (p.amount.compareTo(BigDecimal.ZERO) < 0) {
+                creditors.add(new PersonBalance(p.name, p.amount.abs()));
             }
-            Long fromUserId = settlement.getFromUser().getId();
-            Long toUserId = settlement.getToUser().getId();
-            balances.merge(fromUserId, settlement.getAmount(), BigDecimal::add);
-            balances.merge(toUserId, settlement.getAmount().negate(), BigDecimal::add);
         }
 
-        return balances;
+        List<SettlementLine> txs = new ArrayList<>();
+        int i = 0, j = 0;
+
+        while (i < debtors.size() && j < creditors.size()) {
+            PersonBalance debtor = debtors.get(i);
+            PersonBalance creditor = creditors.get(j);
+
+            BigDecimal payment = debtor.amount.min(creditor.amount);
+            if (payment.compareTo(BigDecimal.ZERO) > 0) {
+                // Using ID string representations; update if PersonBalance has a name field
+                txs.add(new SettlementLine(debtor.name, creditor.name, payment));
+            }
+
+            debtor.amount = debtor.amount.subtract(payment);
+            creditor.amount = creditor.amount.subtract(payment);
+
+            if (debtor.amount.compareTo(BigDecimal.ZERO) == 0) i++;
+            if (creditor.amount.compareTo(BigDecimal.ZERO) == 0) j++;
+        }
+
+        return txs;
     }
 
     private ExpenseGroup requireMemberGroup(Long groupId, Long currentUserId) {
