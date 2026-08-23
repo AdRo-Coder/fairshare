@@ -100,8 +100,8 @@ it('AC1: shows what each member is owed or owes', async () => {
 
     renderPage();
 
-    expect(await screen.findByText('alice owes NZD 21.25')).toBeInTheDocument();
-    expect(screen.getByText('bob is owed NZD 21.25')).toBeInTheDocument();
+    expect(await screen.findByText('alice is settled up')).toBeInTheDocument();
+    expect(screen.getByText('bob owes NZD 21.25')).toBeInTheDocument();
 });
 
 it('AC8: shows a not-found message when the user is not a member', async () => {

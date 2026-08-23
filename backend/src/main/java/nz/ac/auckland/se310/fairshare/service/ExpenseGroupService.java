@@ -134,82 +134,10 @@ public class ExpenseGroupService {
     public List<SettlementLine> computeSettlement(Long groupId, Long currentUserId, SettlementRequest request) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
 
-        List<ExpenseResponse> groupExpenses = expenseService.getExpensesForGroup(groupId, currentUserId);
-        Map<Long, BigDecimal> paidPerUser = new HashMap<>();
-        group.getMembers().forEach(m -> paidPerUser.put(m.getUser().getId(), BigDecimal.ZERO));
-
-        for (ExpenseResponse expense : groupExpenses) {
-            paidPerUser.merge(expense.paidByUserId(), expense.amount(), BigDecimal::add);
-        }
-
-        int count = paidPerUser.size();
-        BigDecimal totalCost = paidPerUser.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal averageShare = totalCost.divide(BigDecimal.valueOf(count), 4, RoundingMode.HALF_UP);
-
-        Map<Long, BigDecimal> netPositions = new HashMap<>();
-        for (Map.Entry<Long, BigDecimal> e : paidPerUser.entrySet()) {
-            netPositions.put(e.getKey(), e.getValue().subtract(averageShare));
-        }
-
-        List<Settlement> settlements = settlementRepository.findByGroupId(groupId);
-        for (Settlement s : settlements) {
-            if (s.getSettlementDate() != null) {
-                Long fromId = s.getFromUser().getId();
-                Long toId = s.getToUser().getId();
-                BigDecimal amt = s.getAmount();
-                netPositions.put(fromId, netPositions.getOrDefault(fromId, BigDecimal.ZERO).add(amt));
-                netPositions.put(toId, netPositions.getOrDefault(toId, BigDecimal.ZERO).subtract(amt));
-            }
-        }
-
-        Map<Long, BigDecimal> effectivePaid = new HashMap<>();
-        for (Map.Entry<Long, BigDecimal> e : netPositions.entrySet()) {
-            effectivePaid.put(e.getKey(), e.getValue().add(averageShare));
-        }
-
-        List<SettlementLine> result = calculateSettlements(effectivePaid);
-
-        for (SettlementLine line : result) {
-            Long fromId = line.fromUserId();
-            Long toId = line.toUserId();
-            BigDecimal amt = line.amount();
-
-            Settlement sameOpen = findOpenSettlement(groupId, fromId, toId);
-            if (sameOpen != null) {
-                sameOpen.setAmount(amt);
-                settlementRepository.save(sameOpen);
-                cleanupExtraOpenSettlements(groupId, fromId, toId, sameOpen);
-                continue;
-            }
-
-            Settlement oppOpen = findOpenSettlement(groupId, toId, fromId);
-            if (oppOpen != null) {
-                BigDecimal oppAmt = oppOpen.getAmount();
-                int cmp = oppAmt.compareTo(amt);
-                if (cmp > 0) {
-                    oppOpen.setAmount(oppAmt.subtract(amt));
-                    settlementRepository.save(oppOpen);
-                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppOpen);
-                } else if (cmp == 0) {
-                    settlementRepository.delete(oppOpen);
-                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppOpen);
-                } else {
-                    settlementRepository.delete(oppOpen);
-                    Settlement newS = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amt.subtract(oppAmt));
-                    newS.setSettlementDate(null);
-                    settlementRepository.save(newS);
-                    cleanupExtraOpenSettlements(groupId, fromId, toId, newS);
-                }
-                continue;
-            }
-
-            Settlement newS = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amt);
-            newS.setSettlementDate(null);
-            settlementRepository.save(newS);
-            cleanupExtraOpenSettlements(groupId, fromId, toId, newS);
-        }
-
-        return result;
+        Map<Long, BigDecimal> effectiveBalances = computeEffectiveBalances(groupId, group, expenseService.getExpensesForGroup(groupId, currentUserId));
+        List<SettlementLine> settlementPlan = calculateSettlements(effectiveBalances);
+        persistSettlementPlan(group, groupId, settlementPlan);
+        return settlementPlan;
     }
 
     @Transactional
@@ -228,10 +156,85 @@ public class ExpenseGroupService {
         settlementRepository.save(settlement);
     }
 
+    private Map<Long, BigDecimal> computeEffectiveBalances(Long groupId, ExpenseGroup group, List<ExpenseResponse> groupExpenses) {
+        Map<Long, BigDecimal> paidPerUser = new HashMap<>();
+        group.getMembers().forEach(member -> paidPerUser.put(member.getUser().getId(), BigDecimal.ZERO));
+
+        for (ExpenseResponse expense : groupExpenses) {
+            paidPerUser.merge(expense.paidByUserId(), expense.amount(), BigDecimal::add);
+        }
+
+        BigDecimal totalCost = paidPerUser.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal averageShare = totalCost.divide(BigDecimal.valueOf(paidPerUser.size()), 4, RoundingMode.HALF_UP);
+
+        Map<Long, BigDecimal> netPositions = new HashMap<>();
+        for (Map.Entry<Long, BigDecimal> entry : paidPerUser.entrySet()) {
+            netPositions.put(entry.getKey(), entry.getValue().subtract(averageShare));
+        }
+
+        for (Settlement settlement : settlementRepository.findByGroupId(groupId)) {
+            if (settlement.getSettlementDate() != null) {
+                Long fromId = settlement.getFromUser().getId();
+                Long toId = settlement.getToUser().getId();
+                netPositions.put(fromId, netPositions.getOrDefault(fromId, BigDecimal.ZERO).add(settlement.getAmount()));
+                netPositions.put(toId, netPositions.getOrDefault(toId, BigDecimal.ZERO).subtract(settlement.getAmount()));
+            }
+        }
+
+        Map<Long, BigDecimal> effectiveBalances = new HashMap<>();
+        for (Map.Entry<Long, BigDecimal> entry : netPositions.entrySet()) {
+            effectiveBalances.put(entry.getKey(), entry.getValue().add(averageShare));
+        }
+        return effectiveBalances;
+    }
+
+    private void persistSettlementPlan(ExpenseGroup group, Long groupId, List<SettlementLine> settlementPlan) {
+        for (SettlementLine line : settlementPlan) {
+            Long fromId = line.fromUserId();
+            Long toId = line.toUserId();
+            BigDecimal amount = line.amount();
+
+            Settlement sameOpen = findOpenSettlement(groupId, fromId, toId);
+            if (sameOpen != null) {
+                sameOpen.setAmount(amount);
+                settlementRepository.save(sameOpen);
+                cleanupExtraOpenSettlements(groupId, fromId, toId, sameOpen);
+                continue;
+            }
+
+            Settlement oppositeOpen = findOpenSettlement(groupId, toId, fromId);
+            if (oppositeOpen != null) {
+                BigDecimal oppositeAmount = oppositeOpen.getAmount();
+                int comparison = oppositeAmount.compareTo(amount);
+
+                if (comparison > 0) {
+                    oppositeOpen.setAmount(oppositeAmount.subtract(amount));
+                    settlementRepository.save(oppositeOpen);
+                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppositeOpen);
+                } else if (comparison == 0) {
+                    settlementRepository.delete(oppositeOpen);
+                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppositeOpen);
+                } else {
+                    settlementRepository.delete(oppositeOpen);
+                    Settlement replacement = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amount.subtract(oppositeAmount));
+                    replacement.setSettlementDate(null);
+                    settlementRepository.save(replacement);
+                    cleanupExtraOpenSettlements(groupId, fromId, toId, replacement);
+                }
+                continue;
+            }
+
+            Settlement newSettlement = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amount);
+            newSettlement.setSettlementDate(null);
+            settlementRepository.save(newSettlement);
+            cleanupExtraOpenSettlements(groupId, fromId, toId, newSettlement);
+        }
+    }
+
     private Settlement findOpenSettlement(Long groupId, Long fromUserId, Long toUserId) {
         return settlementRepository.findByGroupIdAndFromUserIdAndToUserIdOrderByIdDesc(groupId, fromUserId, toUserId)
                 .stream()
-                .filter(s -> s.getSettlementDate() == null)
+                .filter(settlement -> settlement.getSettlementDate() == null)
                 .findFirst()
                 .orElse(null);
     }
@@ -239,8 +242,8 @@ public class ExpenseGroupService {
     private void cleanupExtraOpenSettlements(Long groupId, Long fromUserId, Long toUserId, Settlement keptSettlement) {
         settlementRepository.findByGroupIdAndFromUserIdAndToUserIdOrderByIdDesc(groupId, fromUserId, toUserId)
                 .stream()
-                .filter(s -> s.getSettlementDate() == null)
-                .filter(s -> !s.equals(keptSettlement))
+                .filter(settlement -> settlement.getSettlementDate() == null)
+                .filter(settlement -> !settlement.equals(keptSettlement))
                 .forEach(settlementRepository::delete);
     }
 
