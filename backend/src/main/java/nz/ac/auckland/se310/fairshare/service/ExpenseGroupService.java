@@ -167,12 +167,10 @@ public class ExpenseGroupService {
         BigDecimal amount = settlement.getAmount() == null ? BigDecimal.ZERO : settlement.getAmount();
 
         if (payer != null) {
-            BigDecimal old = payer.getNetBalance() == null ? BigDecimal.ZERO : payer.getNetBalance();
-            payer.adjustNetBalance(old.add(amount.negate()));
+            payer.adjustNetBalance(amount.negate());
         }
         if (recipient != null) {
-            BigDecimal old = recipient.getNetBalance() == null ? BigDecimal.ZERO : recipient.getNetBalance();
-            recipient.adjustNetBalance(old.subtract(amount));
+            recipient.adjustNetBalance(amount);
         }
 
         // Mark the settlement as paid and persist changes
@@ -272,23 +270,12 @@ public class ExpenseGroupService {
 
             Settlement oppositeOpen = findOpenSettlement(groupId, toId, fromId);
             if (oppositeOpen != null) {
-                BigDecimal oppositeAmount = oppositeOpen.getAmount();
-                int comparison = oppositeAmount.compareTo(amount);
+                settlementRepository.delete(oppositeOpen);
 
-                if (comparison > 0) {
-                    oppositeOpen.setAmount(oppositeAmount.subtract(amount));
-                    settlementRepository.save(oppositeOpen);
-                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppositeOpen);
-                } else if (comparison == 0) {
-                    settlementRepository.delete(oppositeOpen);
-                    cleanupExtraOpenSettlements(groupId, toId, fromId, oppositeOpen);
-                } else {
-                    settlementRepository.delete(oppositeOpen);
-                    Settlement replacement = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amount.subtract(oppositeAmount));
-                    replacement.setSettlementDate(null);
-                    settlementRepository.save(replacement);
-                    cleanupExtraOpenSettlements(groupId, fromId, toId, replacement);
-                }
+                Settlement replacement = new Settlement(group, userRepository.findById(fromId).orElseThrow(), userRepository.findById(toId).orElseThrow(), amount);
+                replacement.setSettlementDate(null);
+                settlementRepository.save(replacement);
+                cleanupExtraOpenSettlements(groupId, fromId, toId, replacement);
                 continue;
             }
 

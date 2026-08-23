@@ -78,7 +78,7 @@ class ExpenseGroupServiceSettlementPersistenceTest {
     }
 
     @Test
-    void oppositePendingLargerIsReduced() {
+    void oppositePendingReplacesOldOpenSettlementWithFullNewPlan() {
         when(expenseService.getExpensesForGroup(GROUP_ID, ALICE))
                 .thenReturn(List.of(new ExpenseResponse(100L, GROUP_ID, ALICE, "alice", new BigDecimal("100.00"), null, null, null)));
 
@@ -93,12 +93,17 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         assertThat(result.get(0).fromUserId()).isEqualTo(BOB);
         assertThat(result.get(0).toUserId()).isEqualTo(ALICE);
         assertThat(result.get(0).amount()).isEqualByComparingTo(new BigDecimal("50.00"));
-        assertThat(opp.getAmount()).isEqualByComparingTo(new BigDecimal("20.00"));
-        verify(settlementRepository).save(opp);
+        verify(settlementRepository).delete(opp);
+        verify(settlementRepository).save(settlementCaptor.capture());
+        Settlement saved = settlementCaptor.getValue();
+        assertThat(saved.getFromUser().getId()).isEqualTo(BOB);
+        assertThat(saved.getToUser().getId()).isEqualTo(ALICE);
+        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
+        assertThat(saved.getSettlementDate()).isNull();
     }
 
     @Test
-    void oppositePendingEqualIsDeleted() {
+    void oppositePendingEqualIsReplacedWithFullNewPlan() {
         when(expenseService.getExpensesForGroup(GROUP_ID, ALICE))
                 .thenReturn(List.of(new ExpenseResponse(100L, GROUP_ID, ALICE, "alice", new BigDecimal("100.00"), null, null, null)));
 
@@ -112,10 +117,15 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).amount()).isEqualByComparingTo(new BigDecimal("50.00"));
         verify(settlementRepository).delete(opp);
+        verify(settlementRepository).save(settlementCaptor.capture());
+        Settlement saved = settlementCaptor.getValue();
+        assertThat(saved.getFromUser().getId()).isEqualTo(BOB);
+        assertThat(saved.getToUser().getId()).isEqualTo(ALICE);
+        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
     }
 
     @Test
-    void oppositePendingSmallerCreatesNewPendingWithRemainder() {
+    void oppositePendingSmallerIsReplacedWithFullNewPlan() {
         when(expenseService.getExpensesForGroup(GROUP_ID, ALICE))
                 .thenReturn(List.of(new ExpenseResponse(100L, GROUP_ID, ALICE, "alice", new BigDecimal("100.00"), null, null, null)));
 
@@ -131,7 +141,9 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         verify(settlementRepository).delete(opp);
         verify(settlementRepository).save(settlementCaptor.capture());
         Settlement saved = settlementCaptor.getValue();
-        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("30.00"));
+        assertThat(saved.getFromUser().getId()).isEqualTo(BOB);
+        assertThat(saved.getToUser().getId()).isEqualTo(ALICE);
+        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
         assertThat(saved.getSettlementDate()).isNull();
     }
 
@@ -183,6 +195,31 @@ class ExpenseGroupServiceSettlementPersistenceTest {
 
         assertThat(open.getSettlementDate()).isNotNull();
         verify(settlementRepository).save(open);
+    }
+
+    @Test
+    void reversingDirectionReplacesOldOppositeOpenSettlementWithFullNewPlan() {
+        when(expenseService.getExpensesForGroup(GROUP_ID, ALICE))
+                .thenReturn(List.of(
+                        new ExpenseResponse(100L, GROUP_ID, BOB, "bob", new BigDecimal("40.00"), null, null, null, List.of(ALICE, BOB))
+                ));
+
+        Settlement opposite = new Settlement(group, bobUser, aliceUser, new BigDecimal("70.00"));
+        opposite.setSettlementDate(null);
+        stubPendingSettlement(BOB, ALICE, opposite);
+
+        List<SettlementLine> result = service.computeSettlement(GROUP_ID, ALICE, new SettlementRequest(List.of()));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).fromUserId()).isEqualTo(ALICE);
+        assertThat(result.get(0).toUserId()).isEqualTo(BOB);
+        assertThat(result.get(0).amount()).isEqualByComparingTo(new BigDecimal("20.00"));
+        verify(settlementRepository).delete(opposite);
+        verify(settlementRepository).save(settlementCaptor.capture());
+        Settlement saved = settlementCaptor.getValue();
+        assertThat(saved.getFromUser().getId()).isEqualTo(ALICE);
+        assertThat(saved.getToUser().getId()).isEqualTo(BOB);
+        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("20.00"));
     }
 
     @Test
