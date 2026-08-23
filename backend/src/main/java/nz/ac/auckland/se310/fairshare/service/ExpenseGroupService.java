@@ -303,10 +303,6 @@ public class ExpenseGroupService {
 
     private Map<Long, BigDecimal> computeBalancesIncludingSettlements(ExpenseGroup group) {
         Map<Long, BigDecimal> balances = new HashMap<>();
-        // Start from the stored net balances (positive = owes, negative = owed)
-        for (UserInGroup member : group.getMembers()) {
-            balances.put(member.getUser().getId(), member.getNetBalance());
-        }
 
         for (Settlement settlement : settlementRepository.findByGroupId(group.getId())) {
             if (settlement.getSettlementDate() != null) {
