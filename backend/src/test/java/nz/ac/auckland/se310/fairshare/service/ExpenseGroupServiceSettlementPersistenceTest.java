@@ -171,4 +171,43 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         // After applying the historical paid settlement of 40.00, only 10.00 remains unsettled
         assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("10.00"));
     }
+
+    @Test
+    void markSettlementPaidSetsSettlementDateAndPersistsPayment() {
+        Settlement open = new Settlement(group, bobUser, aliceUser, new BigDecimal("25.00"));
+        open.setSettlementDate(null);
+        when(settlementRepository.findByGroupIdAndFromUserIdAndToUserIdOrderByIdDesc(GROUP_ID, BOB, ALICE))
+                .thenReturn(List.of(open));
+
+        service.markSettlementPaid(GROUP_ID, BOB, ALICE, BOB);
+
+        assertThat(open.getSettlementDate()).isNotNull();
+        verify(settlementRepository).save(open);
+    }
+
+    @Test
+    void staleOpenSettlementsAreDeletedWhenNoSettlementPlanRemains() {
+        when(expenseService.getExpensesForGroup(GROUP_ID, ALICE)).thenReturn(List.of());
+
+        Settlement stale = new Settlement(group, bobUser, aliceUser, new BigDecimal("25.00"));
+        stale.setSettlementDate(null);
+        when(settlementRepository.findByGroupId(GROUP_ID)).thenReturn(List.of(stale));
+
+        service.computeSettlement(GROUP_ID, ALICE, new SettlementRequest(List.of()));
+
+        verify(settlementRepository).delete(stale);
+    }
+
+    @Test
+    void zeroAmountOpenSettlementsAreDeleted() {
+        when(expenseService.getExpensesForGroup(GROUP_ID, ALICE)).thenReturn(List.of());
+
+        Settlement stale = new Settlement(group, bobUser, aliceUser, BigDecimal.ZERO);
+        stale.setSettlementDate(null);
+        when(settlementRepository.findByGroupId(GROUP_ID)).thenReturn(List.of(stale));
+
+        service.computeSettlement(GROUP_ID, ALICE, new SettlementRequest(List.of()));
+
+        verify(settlementRepository).delete(stale);
+    }
 }

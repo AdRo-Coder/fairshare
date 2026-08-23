@@ -148,6 +148,23 @@ class ExpenseIntegrationTest {
     }
 
     @Test
+    void ac4_unevenSplitStillSumsToTheAmount() {
+        groupService.addMember(groupId, CAROL_EMAIL, aliceId);
+
+        var request = new CreateExpenseRequest(new BigDecimal("100.00"), "Internet", aliceId, List.of(aliceId, aliceId, bobId, carolId), null);
+
+        expenseService.createExpense(groupId, request, aliceId);
+
+        // The extra cent goes to the lowest user id, so the shares add back up to 100.00.
+        assertThat(balances()).containsOnly(
+                Map.entry(aliceId, new BigDecimal("-66.66")),
+                Map.entry(bobId, new BigDecimal("33.33")),
+                Map.entry(carolId, new BigDecimal("33.33")));
+        assertThat(balances().values().stream().reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("0.00");
+    }
+
+    @Test
     void ac4_duplicateParticipantIdsAreCountedOnce() {
         var request = new CreateExpenseRequest(
                 new BigDecimal("20.00"), "Taxi", aliceId, List.of(aliceId, aliceId, bobId), null);

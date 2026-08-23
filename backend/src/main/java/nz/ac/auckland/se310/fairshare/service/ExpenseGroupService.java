@@ -168,7 +168,7 @@ public class ExpenseGroupService {
 
         if (payer != null) {
             BigDecimal old = payer.getNetBalance() == null ? BigDecimal.ZERO : payer.getNetBalance();
-            payer.adjustNetBalance(old.add(amount));
+            payer.adjustNetBalance(old.add(amount.negate()));
         }
         if (recipient != null) {
             BigDecimal old = recipient.getNetBalance() == null ? BigDecimal.ZERO : recipient.getNetBalance();
@@ -244,10 +244,23 @@ public class ExpenseGroupService {
     }
 
     private void persistSettlementPlan(ExpenseGroup group, Long groupId, List<SettlementLine> settlementPlan) {
+        Set<String> activeSettlements = new HashSet<>();
+
         for (SettlementLine line : settlementPlan) {
             Long fromId = line.fromUserId();
             Long toId = line.toUserId();
             BigDecimal amount = line.amount();
+
+            if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
+                Settlement existing = findOpenSettlement(groupId, fromId, toId);
+                if (existing != null) {
+                    settlementRepository.delete(existing);
+                    cleanupExtraOpenSettlements(groupId, fromId, toId, null);
+                }
+                continue;
+            }
+
+            activeSettlements.add(fromId + ":" + toId);
 
             Settlement sameOpen = findOpenSettlement(groupId, fromId, toId);
             if (sameOpen != null) {
@@ -284,6 +297,8 @@ public class ExpenseGroupService {
             settlementRepository.save(newSettlement);
             cleanupExtraOpenSettlements(groupId, fromId, toId, newSettlement);
         }
+
+        deleteUnusedOpenSettlements(groupId, activeSettlements);
     }
 
     private Settlement findOpenSettlement(Long groupId, Long fromUserId, Long toUserId) {
@@ -299,6 +314,14 @@ public class ExpenseGroupService {
                 .stream()
                 .filter(settlement -> settlement.getSettlementDate() == null)
                 .filter(settlement -> !settlement.equals(keptSettlement))
+                .forEach(settlementRepository::delete);
+    }
+
+    private void deleteUnusedOpenSettlements(Long groupId, Set<String> activeSettlementKeys) {
+        settlementRepository.findByGroupId(groupId).stream()
+                .filter(settlement -> settlement.getSettlementDate() == null)
+                .filter(settlement -> settlement.getAmount() == null || settlement.getAmount().compareTo(BigDecimal.ZERO) == 0
+                        || !activeSettlementKeys.contains(settlement.getFromUser().getId() + ":" + settlement.getToUser().getId()))
                 .forEach(settlementRepository::delete);
     }
 
