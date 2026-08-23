@@ -139,11 +139,13 @@ public class ExpenseService {
         long baseShare = totalCents / members.size();
         long extraCents = totalCents % members.size();
 
-        payer.adjustNetBalance(amount);
+        // Positive netBalance means the member owes money. Payer paid, so they are owed -> subtract
+        payer.adjustNetBalance(amount.negate());
 
         for (int i = 0; i < members.size(); i++) {
             long shareCents = baseShare + (i < extraCents ? 1 : 0);
-            members.get(i).adjustNetBalance(cents(-shareCents));
+            // participants owe the share
+            members.get(i).adjustNetBalance(cents(shareCents));
             try {
                 expenseShareRepository.save(new ExpenseShare(members.get(i).getUser(), expense, cents(shareCents)));
             } catch (Exception e) {
@@ -159,14 +161,16 @@ public class ExpenseService {
         for (ExpenseShare share : existingShares) {
             UserInGroup member = expense.getGroup().getMember(share.getUser().getId());
             if (member != null) {
-                member.adjustNetBalance(share.getShareAmount());
+                // previously participants had added positive share amounts; remove that
+                member.adjustNetBalance(share.getShareAmount().negate());
             }
             expenseShareRepository.delete(share);
         }
         // Flush so the deletes hit the DB before the new shares are inserted, otherwise the
         // unique constraint on (user_id, expense_id) can be violated by Hibernate's action ordering.
         expenseShareRepository.flush();
-        originalPayer.adjustNetBalance(expense.getAmount().negate());
+        // Revert the original payer's owed/owed-to adjustment
+        originalPayer.adjustNetBalance(expense.getAmount());
 
         // Apply the new split
         applyEqualSplit(newPayer, newAmount, members, expense);

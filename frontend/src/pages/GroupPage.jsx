@@ -1,27 +1,26 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { getGroup, getGroupMembers } from '../api/groups';
-import { getExpenses } from '../api/expenses';
+import {useEffect, useState} from 'react';
+import {Link, useParams} from 'react-router-dom';
+import {getGroup, getGroupMembers} from '../api/groups';
+import {getExpenses} from '../api/expenses';
 import SettlementView from './SettlementView';
 import './GroupPage.css';
 
 function money(currency, value) {
-    return `${currency} ${Number(value).toFixed(2)}`;
+    return `${currency} ${Math.abs(Number(value)).toFixed(2)}`;
 }
 
 function balanceLine(member, currency) {
     const balance = Number(member.netBalance);
     if (balance > 0) {
+        return `${member.username} owes ${money(currency, balance)}`;
+    } else if (balance < 0) {
         return `${member.username} is owed ${money(currency, balance)}`;
-    }
-    if (balance < 0) {
-        return `${member.username} owes ${money(currency, -balance)}`;
     }
     return `${member.username} is settled up`;
 }
 
 function GroupPage() {
-    const { id } = useParams();
+    const {id} = useParams();
     const [group, setGroup] = useState(null);
     const [expenses, setExpenses] = useState([]);
     const [members, setMembers] = useState([]);
@@ -57,6 +56,7 @@ function GroupPage() {
                 setLoading(false);
             }
         }
+
         load();
     }, [id]);
 
@@ -101,7 +101,7 @@ function GroupPage() {
                     <h2>Expenses</h2>
                     <Link className="action" to={`/groups/${id}/expenses/new`}>Add an expense</Link>
 
-                    {/* AC7: every member sees the expense with amount, description, payer and date */} 
+                    {/* AC7: every member sees the expense with amount, description, payer and date */}
                     {/* #8 AC7: Expenses can be edited */}
                     {expenses.length === 0 ? (
                         <p className="empty">No expenses yet.</p>
@@ -109,7 +109,8 @@ function GroupPage() {
                         <ul className="expense-list">
                             {expenses.map((expense) => (
                                 <li key={expense.id}>
-                                    <Link className="action" to={`/groups/${id}/expenses/${expense.id}/edit`}>Edit</Link>
+                                    <Link className="action"
+                                          to={`/groups/${id}/expenses/${expense.id}/edit`}>Edit</Link>
                                     <span className="expense-description">{expense.description}</span>
                                     <span className="expense-meta">
                                         {expense.paidByUsername} paid on {expense.expenseDate}
@@ -129,9 +130,9 @@ function GroupPage() {
                     {settled ? (
                         <p className="balance">
                             Everyone is settled up. Balance: {money(group.baseCurrency, 0)}
-                            <br />
-                            
-                            
+                            <br/>
+
+
                         </p>
                     ) : (
                         <ul className="balance-list">
@@ -140,16 +141,15 @@ function GroupPage() {
                                     {balanceLine(member, group.baseCurrency)}
                                 </li>
                             ))}
-                            
+
                         </ul>
                     )}
                     <Link to={`/groups/${id}/balance`}>View Detailed</Link>
-                    
                 </section>
 
                 <section>
                     <h2>Settlement plan</h2>
-                    <SettlementView groupId={group.id} baseCurrency={group.baseCurrency} />
+                    <SettlementView groupId={group.id} baseCurrency={group.baseCurrency}/>
                 </section>
 
                 <Link to="/groups">Back to your groups</Link>

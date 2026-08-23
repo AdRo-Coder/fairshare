@@ -51,12 +51,12 @@ it('renders each member balance with correct text, class and link', async () => 
     expect(await screen.findByText('Balances')).toBeInTheDocument();
     expect(screen.getByText('Flat 3')).toBeInTheDocument();
 
-    const positive = screen.getByText('+ NZD 12.50');
-    const negative = screen.getByText('- NZD 5.25');
+    const positive = screen.getByText('- NZD 12.50');
+    const negative = screen.getByText('+ NZD 5.25');
     const neutral = screen.getByText('is settled up');
 
-    expect(positive).toHaveClass('balance-Positive');
-    expect(negative).toHaveClass('balance-Negative');
+    expect(positive).toHaveClass('balance-Negative');
+    expect(negative).toHaveClass('balance-Positive');
     expect(neutral).toHaveClass('balance-Neutral');
 
     expect(screen.getByRole('link', { name: 'alice' })).toHaveAttribute('href', '/groups/1/balance/1');

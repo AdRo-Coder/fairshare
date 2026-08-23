@@ -71,6 +71,17 @@ export async function computeSettlement(id, balances) {
     return response.json();
 }
 
+export async function markSettlementPaid(id, fromUserId, toUserId) {
+    const groupId = requirePositiveInteger(id, 'Group ID');
+    const payerId = requirePositiveInteger(fromUserId, 'From user ID');
+    const recipientId = requirePositiveInteger(toUserId, 'To user ID');
+    const response = await apiFetch(`/groups/${groupId}/settlements/${payerId}/${recipientId}/paid`, {
+        method: 'PATCH'
+    });
+    if (!response.ok) throw new Error(`Failed to mark settlement as paid: ${response.status}`);
+    return response.status === 204 ? true : response.json();
+}
+
 export async function getGroupMembers(id) {
     const groupId = requirePositiveInteger(id, 'Group ID');
     const response = await apiFetch(`/groups/${groupId}/members`);

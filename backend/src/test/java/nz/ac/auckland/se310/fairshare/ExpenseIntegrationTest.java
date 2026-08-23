@@ -108,8 +108,8 @@ class ExpenseIntegrationTest {
         expenseService.createExpense(groupId, request, aliceId);
 
         assertThat(balances()).containsOnly(
-                Map.entry(bobId, new BigDecimal("21.25")),
-                Map.entry(aliceId, new BigDecimal("-21.25")));
+                Map.entry(aliceId, new BigDecimal("21.25")),
+                Map.entry(bobId, new BigDecimal("-21.25")));
     }
 
     @Test
@@ -142,24 +142,24 @@ class ExpenseIntegrationTest {
         expenseService.createExpense(groupId, request, aliceId);
 
         assertThat(balances()).containsOnly(
-                Map.entry(aliceId, new BigDecimal("60.00")),
-                Map.entry(bobId, new BigDecimal("-30.00")),
-                Map.entry(carolId, new BigDecimal("-30.00")));
+                Map.entry(aliceId, new BigDecimal("-60.00")),
+                Map.entry(bobId, new BigDecimal("30.00")),
+                Map.entry(carolId, new BigDecimal("30.00")));
     }
 
     @Test
-    void ac4_unevenSplitStillSumsToTheAmount() { // Also tests #8 AC2
+    void ac4_unevenSplitStillSumsToTheAmount() {
         groupService.addMember(groupId, CAROL_EMAIL, aliceId);
 
-        var request = new CreateExpenseRequest(new BigDecimal("100.00"), "Internet", aliceId, memberIds, null);
+        var request = new CreateExpenseRequest(new BigDecimal("100.00"), "Internet", aliceId, List.of(aliceId, aliceId, bobId, carolId), null);
 
         expenseService.createExpense(groupId, request, aliceId);
 
         // The extra cent goes to the lowest user id, so the shares add back up to 100.00.
         assertThat(balances()).containsOnly(
-                Map.entry(aliceId, new BigDecimal("66.66")),
-                Map.entry(bobId, new BigDecimal("-33.33")),
-                Map.entry(carolId, new BigDecimal("-33.33")));
+                Map.entry(aliceId, new BigDecimal("-66.66")),
+                Map.entry(bobId, new BigDecimal("33.33")),
+                Map.entry(carolId, new BigDecimal("33.33")));
         assertThat(balances().values().stream().reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo("0.00");
     }
@@ -173,8 +173,8 @@ class ExpenseIntegrationTest {
 
         assertThat(created.participantUserIds()).containsExactlyInAnyOrder(aliceId, bobId);
         assertThat(balances()).containsOnly(
-                Map.entry(aliceId, new BigDecimal("10.00")),
-                Map.entry(bobId, new BigDecimal("-10.00")));
+                Map.entry(aliceId, new BigDecimal("-10.00")),
+                Map.entry(bobId, new BigDecimal("10.00")));
     }
 
     @Test
@@ -244,9 +244,9 @@ class ExpenseIntegrationTest {
         expenseService.createExpense(groupId, request, aliceId);
 
         assertThat(balances()).containsOnly(
-                Map.entry(aliceId, new BigDecimal("45.00")),
+                Map.entry(aliceId, new BigDecimal("-45.00")),
                 Map.entry(bobId, new BigDecimal("0.00")),
-                Map.entry(carolId, new BigDecimal("-45.00")));
+                Map.entry(carolId, new BigDecimal("45.00")));
     }
 
     @Test
@@ -267,8 +267,8 @@ class ExpenseIntegrationTest {
         expenseService.updateExpense(groupId, updateRequest, aliceId, created.id());
 
         assertThat(balances()).containsOnly(
-                Map.entry(bobId, new BigDecimal("25.00")),
-                Map.entry(aliceId, new BigDecimal("-25.00")));
+                Map.entry(bobId, new BigDecimal("-25.00")),
+                Map.entry(aliceId, new BigDecimal("25.00")));
     }
 
     @Test
@@ -295,8 +295,8 @@ class ExpenseIntegrationTest {
         expenseService.updateExpense(groupId, updateRequest, aliceId, created.id());
 
         assertThat(balances()).containsOnly(
-                Map.entry(aliceId, new BigDecimal("45.00")),
-                Map.entry(bobId, new BigDecimal("-45.00")),
+                Map.entry(aliceId, new BigDecimal("-45.00")),
+                Map.entry(bobId, new BigDecimal("45.00")),
                 Map.entry(carolId, new BigDecimal("0.00")));
     }
 
