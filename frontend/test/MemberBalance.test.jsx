@@ -75,8 +75,8 @@ it('renders selected member balance and only their transactions', async () => {
     renderPage();
 
     expect(await screen.findByText('bob')).toBeInTheDocument();
-    const balance = screen.getByText('+ NZD 10.50');
-    expect(balance).toHaveClass('balance-Positive');
+    const balance = screen.getByText('- NZD 10.50');
+    expect(balance).toHaveClass('balance-Negative');
 
     expect(screen.getByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('bob paid on 2026-08-19')).toBeInTheDocument();
