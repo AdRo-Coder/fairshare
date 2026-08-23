@@ -71,9 +71,6 @@ export default function SettlementView({ groupId, baseCurrency }) {
 
     if (!balances) return <p>Loading balances…</p>;
 
-    const allZero = balances.every(b => Number(b.balance) === 0);
-    if (allZero) return <p className="empty">Everyone is settled up.</p>;
-
     const memberLookup = new Map(members.map(member => [member.userId, member.username]));
 
     return (
@@ -88,21 +85,26 @@ export default function SettlementView({ groupId, baseCurrency }) {
                             {settlement.map((s, idx) => {
                                 const fromUsername = memberLookup.get(s.fromUserId) || `User ${s.fromUserId}`;
                                 const toUsername = memberLookup.get(s.toUserId) || `User ${s.toUserId}`;
+                                                            const currentMember = members.find(m => m.currentUser);
+                                                            const currentUserId = currentMember ? currentMember.userId : null;
+                                                            const canMark = currentUserId !== null && (currentUserId === s.fromUserId || currentUserId === s.toUserId);
 
-                                return (
-                                    <li key={idx}>
-                                        <span>{`${fromUsername} pays ${toUsername}: ${baseCurrency} ${parseFloat(s.amount).toFixed(2)}`}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => onMarkPaid(s.fromUserId, s.toUserId)}
-                                            disabled={paying === `${s.fromUserId}-${s.toUserId}`}
-                                            style={{ marginLeft: '0.75rem' }}
-                                        >
-                                            {paying === `${s.fromUserId}-${s.toUserId}` ? 'Marking paid…' : 'Mark as paid'}
-                                        </button>
-                                    </li>
-                                );
-                            })}
+                                                            return (
+                                                                <li key={idx}>
+                                                                    <span>{`${fromUsername} pays ${toUsername}: ${baseCurrency} ${parseFloat(s.amount).toFixed(2)}`}</span>
+                                                                    {canMark && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => onMarkPaid(s.fromUserId, s.toUserId)}
+                                                                            disabled={paying === `${s.fromUserId}-${s.toUserId}`}
+                                                                            style={{ marginLeft: '0.75rem' }}
+                                                                        >
+                                                                            {paying === `${s.fromUserId}-${s.toUserId}` ? 'Marking paid…' : 'Mark as paid'}
+                                                                        </button>
+                                                                    )}
+                                                                </li>
+                                                            );
+                                                        })}
                         </ul>
                     )}
                 </div>

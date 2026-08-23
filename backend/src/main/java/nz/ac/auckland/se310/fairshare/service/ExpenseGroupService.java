@@ -78,7 +78,7 @@ public class ExpenseGroupService {
     @Transactional(readOnly = true)
     public List<GroupMemberResponse> getMembers(Long groupId, Long currentUserId) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
-        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
+        Map<Long, BigDecimal> memberBalances = computeEffectiveBalances(groupId, group, expenseService.getExpensesForGroup(groupId, currentUserId));
         return group.getMembers().stream()
                 .map(member -> toMemberResponse(member, currentUserId, memberBalances))
                 .sorted((first, second) -> first.username().compareToIgnoreCase(second.username()))
@@ -97,7 +97,7 @@ public class ExpenseGroupService {
 
         group.addMember(user);
         groupRepository.save(group);
-        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
+        Map<Long, BigDecimal> memberBalances = computeEffectiveBalances(group.getId(), group, expenseService.getExpensesForGroup(group.getId(), currentUserId));
         return toMemberResponse(group.getMember(user.getId()), currentUserId, memberBalances);
     }
 
@@ -124,7 +124,7 @@ public class ExpenseGroupService {
     @Transactional(readOnly = true)
     public List<MemberBalance> getBalances(Long groupId, Long currentUserId) {
         ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
-        Map<Long, BigDecimal> memberBalances = computeBalancesIncludingSettlements(group);
+        Map<Long, BigDecimal> memberBalances = computeEffectiveBalances(groupId, group, null);
         return group.getMembers().stream()
                 .sorted(Comparator.comparing(member -> member.getUser().getId()))
                 .map(member -> new MemberBalance(member.getUser().getId(), memberBalances.getOrDefault(member.getUser().getId(), BigDecimal.ZERO)))
@@ -142,7 +142,12 @@ public class ExpenseGroupService {
 
     @Transactional
     public void markSettlementPaid(Long groupId, Long fromUserId, Long toUserId, Long currentUserId) {
-        requireMemberGroup(groupId, currentUserId);
+        // Only the payer or the recipient may mark the settlement as paid (AC5, AC8)
+        if (!List.of(fromUserId, toUserId).contains(currentUserId)) {
+            throw new GroupMemberConflictException("User not allowed to marked settlement as paid");
+        }
+
+        ExpenseGroup group = requireMemberGroup(groupId, currentUserId);
 
         Settlement settlement = findOpenSettlement(groupId, fromUserId, toUserId);
         if (settlement == null) {
@@ -152,12 +157,35 @@ public class ExpenseGroupService {
             throw new IllegalArgumentException("No open settlement found for this user pair");
         }
 
+        // Apply the payment to persisted member net balances so stored balances reflect the transfer
+        Long payerId = settlement.getFromUser().getId();
+        Long recipientId = settlement.getToUser().getId();
+
+        UserInGroup payer = group.getMember(payerId);
+        UserInGroup recipient = group.getMember(recipientId);
+
+        BigDecimal amount = settlement.getAmount() == null ? BigDecimal.ZERO : settlement.getAmount();
+
+        if (payer != null) {
+            BigDecimal old = payer.getNetBalance() == null ? BigDecimal.ZERO : payer.getNetBalance();
+            payer.adjustNetBalance(old.subtract(amount));
+        }
+        if (recipient != null) {
+            BigDecimal old = recipient.getNetBalance() == null ? BigDecimal.ZERO : recipient.getNetBalance();
+            recipient.adjustNetBalance(old.add(amount));
+        }
+
+        // Mark the settlement as paid and persist changes
         settlement.setSettlementDate(LocalDate.now());
         settlementRepository.save(settlement);
+        groupRepository.save(group);
     }
 
     private Map<Long, BigDecimal> computeEffectiveBalances(Long groupId, ExpenseGroup group, List<ExpenseResponse> groupExpenses) {
+        // Start from the persisted per-member net balance (expenses are already applied)
         Map<Long, BigDecimal> balances = new HashMap<>();
+
+        // Reconstruct from supplied expenses (used when computing a settlement plan)
         for (UserInGroup member : group.getMembers()) {
             balances.put(member.getUser().getId(), BigDecimal.ZERO);
         }
@@ -169,32 +197,48 @@ public class ExpenseGroupService {
             }
 
             List<Long> participantIds = expense.participantUserIds() == null || expense.participantUserIds().isEmpty()
-                    ? group.getMembers().stream().map(member -> member.getUser().getId()).toList()
-                    : expense.participantUserIds().stream().distinct().toList();
+                    ? group.getMembers().stream().map(member -> member.getUser().getId()).sorted().toList()
+                    : expense.participantUserIds().stream().distinct().sorted().toList();
             if (participantIds.isEmpty()) {
                 continue;
             }
 
-            BigDecimal expenseAmount = expense.amount() == null ? BigDecimal.ZERO : expense.amount();
-            BigDecimal sharePerParticipant = expenseAmount.divide(
-                    BigDecimal.valueOf(participantIds.size()), 4, RoundingMode.HALF_UP);
+            BigDecimal expenseAmount = expense.amount() == null ? BigDecimal.ZERO : expense.amount().setScale(2, RoundingMode.HALF_UP);
+
+            // Reconstruct cent-accurate split
+            long totalCents = expenseAmount.movePointRight(2).longValueExact();
+            long baseShare = totalCents / participantIds.size();
+            long extraCents = totalCents % participantIds.size();
 
             if (expense.paidByUserId() != null) {
                 balances.merge(expense.paidByUserId(), expenseAmount.negate(), BigDecimal::add);
             }
-            for (Long participantId : participantIds) {
-                balances.merge(participantId, sharePerParticipant, BigDecimal::add);
+
+            for (int i = 0; i < participantIds.size(); i++) {
+                long shareCents = baseShare + (i < extraCents ? 1 : 0);
+                BigDecimal share = BigDecimal.valueOf(shareCents, 2);
+                balances.merge(participantIds.get(i), share, BigDecimal::add);
             }
         }
 
+        // Apply settlements: open settlements increase debtor and decrease creditor;
+        // historical (paid) settlements cancel previous debts (subtract from payer, add to payee).
         for (Settlement settlement : settlementRepository.findByGroupId(groupId)) {
-            if (settlement.getSettlementDate() != null) {
-                Long fromId = settlement.getFromUser().getId();
-                Long toId = settlement.getToUser().getId();
+            if (settlement.getSettlementDate() == null) {
+                continue;
+            }
+            Long fromId = settlement.getFromUser().getId();
+            Long toId = settlement.getToUser().getId();
+            if (settlement.getSettlementDate() == null) {
                 balances.merge(fromId, settlement.getAmount(), BigDecimal::add);
                 balances.merge(toId, settlement.getAmount().negate(), BigDecimal::add);
+            } else {
+                balances.merge(fromId, settlement.getAmount().negate(), BigDecimal::add);
+                balances.merge(toId, settlement.getAmount(), BigDecimal::add);
             }
         }
+
+        balances.replaceAll((key, value) -> value == null ? BigDecimal.ZERO.setScale(2) : value.setScale(2, RoundingMode.HALF_UP));
 
         return balances;
     }
@@ -275,8 +319,10 @@ public class ExpenseGroupService {
             }
         }
 
-        debtors.sort(Comparator.comparingLong(balance -> balance.name));
-        creditors.sort(Comparator.comparingLong(balance -> balance.name));
+        // Sort by amount descending to pair largest debtors with largest creditors first —
+        // this tends to minimise the number of transactions compared to arbitrary ID ordering.
+        debtors.sort((a, b) -> b.amount.compareTo(a.amount));
+        creditors.sort((a, b) -> b.amount.compareTo(a.amount));
 
         List<SettlementLine> transactions = new ArrayList<>();
         int i = 0;

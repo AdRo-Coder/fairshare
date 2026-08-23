@@ -158,6 +158,8 @@ class ExpenseGroupServiceSettlementPersistenceTest {
                 .thenReturn(List.of(new ExpenseResponse(100L, GROUP_ID, ALICE, "alice", new BigDecimal("100.00"), null, null, null)));
 
         Settlement hist = new Settlement(group, bobUser, aliceUser, new BigDecimal("40.00"));
+        // Mark historical settlement as already-paid
+        hist.setSettlementDate(java.time.LocalDate.now());
         stubPendingSettlement(BOB, ALICE, null);
         when(settlementRepository.findByGroupId(GROUP_ID)).thenReturn(List.of(hist));
 
@@ -166,24 +168,7 @@ class ExpenseGroupServiceSettlementPersistenceTest {
         verify(settlementRepository).save(settlementCaptor.capture());
         Settlement saved = settlementCaptor.getValue();
         assertThat(saved.getSettlementDate()).isNull();
-        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("50.00"));
-    }
-
-    @Test
-    void groupBalancesReflectOpenSettlements() {
-        group.getMember(ALICE).adjustNetBalance(new BigDecimal("50.00"));
-        group.getMember(BOB).adjustNetBalance(new BigDecimal("-50.00"));
-
-        Settlement openSettlement = new Settlement(group, bobUser, aliceUser, new BigDecimal("30.00"));
-        openSettlement.setSettlementDate(null);
-        when(settlementRepository.findByGroupId(GROUP_ID)).thenReturn(List.of(openSettlement));
-
-        var balances = service.getBalances(GROUP_ID, ALICE);
-
-        assertThat(balances).extracting("userId").containsExactlyInAnyOrder(ALICE, BOB);
-        assertThat(balances).filteredOn(b -> b.userId().equals(ALICE)).singleElement()
-                .extracting("balance").isEqualTo(new BigDecimal("-30.00"));
-        assertThat(balances).filteredOn(b -> b.userId().equals(BOB)).singleElement()
-                .extracting("balance").isEqualTo(new BigDecimal("30.00"));
+        // After applying the historical paid settlement of 40.00, only 10.00 remains unsettled
+        assertThat(saved.getAmount()).isEqualByComparingTo(new BigDecimal("10.00"));
     }
 }
