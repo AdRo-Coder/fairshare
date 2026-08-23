@@ -10,20 +10,20 @@ function money(currency, value) {
 function balanceLine(member, currency) {
     const balance = Number(member.netBalance);
     if (balance > 0) {
-        return `+ ${money(currency, balance)}`;
+        return `- ${money(currency, balance)}`;
     }
     if (balance < 0) {
-        return `- ${money(currency, -balance)}`;
+        return `+ ${money(currency, -balance)}`;
     }
     return `is settled up`;
 }
 function balanceClass(member) {
     const balance = Number(member.netBalance);
     if (balance > 0) {
-        return 'balance-Positive';
+        return 'balance-Negative';
     }
     if (balance < 0) {
-        return 'balance-Negative';
+        return 'balance-Positive'
     }
     return 'balance-Neutral';
 }

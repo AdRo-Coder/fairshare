@@ -8,4 +8,10 @@ import java.util.List;
 public record ExpenseResponse(
         Long id, Long groupId, Long paidByUserId, String paidByUsername,
         BigDecimal amount, String description, LocalDate expenseDate, Instant createdAt,
-        List<Long> participantUserIds) {}
+        List<Long> participantUserIds) {
+
+    public ExpenseResponse(Long id, Long groupId, Long paidByUserId, String paidByUsername,
+                           BigDecimal amount, String description, LocalDate expenseDate, Instant createdAt) {
+        this(id, groupId, paidByUserId, paidByUsername, amount, description, expenseDate, createdAt, List.of());
+    }
+}

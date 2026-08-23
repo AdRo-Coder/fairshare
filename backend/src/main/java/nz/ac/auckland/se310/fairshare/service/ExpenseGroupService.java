@@ -157,35 +157,46 @@ public class ExpenseGroupService {
     }
 
     private Map<Long, BigDecimal> computeEffectiveBalances(Long groupId, ExpenseGroup group, List<ExpenseResponse> groupExpenses) {
-        Map<Long, BigDecimal> paidPerUser = new HashMap<>();
-        group.getMembers().forEach(member -> paidPerUser.put(member.getUser().getId(), BigDecimal.ZERO));
-
-        for (ExpenseResponse expense : groupExpenses) {
-            paidPerUser.merge(expense.paidByUserId(), expense.amount(), BigDecimal::add);
+        Map<Long, BigDecimal> balances = new HashMap<>();
+        for (UserInGroup member : group.getMembers()) {
+            balances.put(member.getUser().getId(), BigDecimal.ZERO);
         }
 
-        BigDecimal totalCost = paidPerUser.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal averageShare = totalCost.divide(BigDecimal.valueOf(paidPerUser.size()), 4, RoundingMode.HALF_UP);
+        List<ExpenseResponse> expenses = groupExpenses == null ? Collections.emptyList() : groupExpenses;
+        for (ExpenseResponse expense : expenses) {
+            if (expense == null) {
+                continue;
+            }
 
-        Map<Long, BigDecimal> netPositions = new HashMap<>();
-        for (Map.Entry<Long, BigDecimal> entry : paidPerUser.entrySet()) {
-            netPositions.put(entry.getKey(), entry.getValue().subtract(averageShare));
+            List<Long> participantIds = expense.participantUserIds() == null || expense.participantUserIds().isEmpty()
+                    ? group.getMembers().stream().map(member -> member.getUser().getId()).toList()
+                    : expense.participantUserIds().stream().distinct().toList();
+            if (participantIds.isEmpty()) {
+                continue;
+            }
+
+            BigDecimal expenseAmount = expense.amount() == null ? BigDecimal.ZERO : expense.amount();
+            BigDecimal sharePerParticipant = expenseAmount.divide(
+                    BigDecimal.valueOf(participantIds.size()), 4, RoundingMode.HALF_UP);
+
+            if (expense.paidByUserId() != null) {
+                balances.merge(expense.paidByUserId(), expenseAmount.negate(), BigDecimal::add);
+            }
+            for (Long participantId : participantIds) {
+                balances.merge(participantId, sharePerParticipant, BigDecimal::add);
+            }
         }
 
         for (Settlement settlement : settlementRepository.findByGroupId(groupId)) {
             if (settlement.getSettlementDate() != null) {
                 Long fromId = settlement.getFromUser().getId();
                 Long toId = settlement.getToUser().getId();
-                netPositions.put(fromId, netPositions.getOrDefault(fromId, BigDecimal.ZERO).add(settlement.getAmount()));
-                netPositions.put(toId, netPositions.getOrDefault(toId, BigDecimal.ZERO).subtract(settlement.getAmount()));
+                balances.merge(fromId, settlement.getAmount(), BigDecimal::add);
+                balances.merge(toId, settlement.getAmount().negate(), BigDecimal::add);
             }
         }
 
-        Map<Long, BigDecimal> effectiveBalances = new HashMap<>();
-        for (Map.Entry<Long, BigDecimal> entry : netPositions.entrySet()) {
-            effectiveBalances.put(entry.getKey(), entry.getValue().add(averageShare));
-        }
-        return effectiveBalances;
+        return balances;
     }
 
     private void persistSettlementPlan(ExpenseGroup group, Long groupId, List<SettlementLine> settlementPlan) {
@@ -252,47 +263,30 @@ public class ExpenseGroupService {
             return Collections.emptyList();
         }
 
-        int count = totalExpenses.size();
-
-        // 1. Calculate total expenses and average share per person
-        BigDecimal totalCost = totalExpenses.values().stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        // Divide by total people, keeping precision to 4 decimal places before final rounding
-        BigDecimal averageShare = totalCost.divide(
-                BigDecimal.valueOf(count), 4, RoundingMode.HALF_UP
-        );
-
-        // 2. Separate participants into debtors and creditors
         List<PersonBalance> debtors = new ArrayList<>();
         List<PersonBalance> creditors = new ArrayList<>();
 
         for (Map.Entry<Long, BigDecimal> entry : totalExpenses.entrySet()) {
-            BigDecimal netBalance = entry.getValue().subtract(averageShare);
-
-            // Compare to zero using compareTo
-            if (netBalance.compareTo(BigDecimal.ZERO) < 0) {
-                // Net negative -> Debtor (store positive debt value)
-                debtors.add(new PersonBalance(entry.getKey(), netBalance.abs()));
-            } else if (netBalance.compareTo(BigDecimal.ZERO) > 0) {
-                // Net positive -> Creditor
-                creditors.add(new PersonBalance(entry.getKey(), netBalance));
+            BigDecimal amount = entry.getValue() == null ? BigDecimal.ZERO : entry.getValue();
+            if (amount.compareTo(BigDecimal.ZERO) > 0) {
+                debtors.add(new PersonBalance(entry.getKey(), amount));
+            } else if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                creditors.add(new PersonBalance(entry.getKey(), amount.abs()));
             }
         }
 
-        // 3. Greedy settlement using two pointers
+        debtors.sort(Comparator.comparingLong(balance -> balance.name));
+        creditors.sort(Comparator.comparingLong(balance -> balance.name));
+
         List<SettlementLine> transactions = new ArrayList<>();
-        int i = 0; // Debtor pointer
-        int j = 0; // Creditor pointer
+        int i = 0;
+        int j = 0;
 
         while (i < debtors.size() && j < creditors.size()) {
             PersonBalance debtor = debtors.get(i);
             PersonBalance creditor = creditors.get(j);
 
-            // Payment is the minimum between debt owed and debt due
-            BigDecimal payment = debtor.amount.min(creditor.amount)
-                    .setScale(2, RoundingMode.HALF_UP);
-
+            BigDecimal payment = debtor.amount.min(creditor.amount).setScale(2, RoundingMode.HALF_UP);
             if (payment.compareTo(BigDecimal.ZERO) > 0) {
                 transactions.add(new SettlementLine(debtor.name, creditor.name, payment));
             }
@@ -300,7 +294,6 @@ public class ExpenseGroupService {
             debtor.amount = debtor.amount.subtract(payment);
             creditor.amount = creditor.amount.subtract(payment);
 
-            // Move pointer if balance is fully settled (threshold for remaining fractions)
             if (debtor.amount.compareTo(new BigDecimal("0.005")) < 0) i++;
             if (creditor.amount.compareTo(new BigDecimal("0.005")) < 0) j++;
         }
@@ -310,9 +303,6 @@ public class ExpenseGroupService {
 
     private Map<Long, BigDecimal> computeBalancesIncludingSettlements(ExpenseGroup group) {
         Map<Long, BigDecimal> balances = new HashMap<>();
-        for (UserInGroup member : group.getMembers()) {
-            balances.put(member.getUser().getId(), member.getNetBalance());
-        }
 
         for (Settlement settlement : settlementRepository.findByGroupId(group.getId())) {
             if (settlement.getSettlementDate() != null) {

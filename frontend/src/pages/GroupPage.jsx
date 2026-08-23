@@ -141,7 +141,6 @@ function GroupPage() {
                         </ul>
                     )}
                     <Link to={`/groups/${id}/balance`}>View Detailed</Link>
-                    
                 </section>
 
                 <section>
