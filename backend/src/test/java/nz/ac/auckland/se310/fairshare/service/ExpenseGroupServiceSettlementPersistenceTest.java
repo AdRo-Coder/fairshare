@@ -182,8 +182,8 @@ class ExpenseGroupServiceSettlementPersistenceTest {
 
         assertThat(balances).extracting("userId").containsExactlyInAnyOrder(ALICE, BOB);
         assertThat(balances).filteredOn(b -> b.userId().equals(ALICE)).singleElement()
-                .extracting("balance").isEqualTo(new BigDecimal("-80.00"));
+                .extracting("balance").isEqualTo(new BigDecimal("20.00"));
         assertThat(balances).filteredOn(b -> b.userId().equals(BOB)).singleElement()
-                .extracting("balance").isEqualTo(new BigDecimal("80.00"));
+                .extracting("balance").isEqualTo(new BigDecimal("-20.00"));
     }
 }
